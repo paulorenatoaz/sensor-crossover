@@ -89,33 +89,33 @@ def main():
 
         AB_idx = _get_feature_indices(matrix.columns, [sensors["A"], B_id])
 
-            # d = 1
-            print(f"    d=1 (sensor A={sensors['A']}) ...")
-            raw_d1 = run_experiment(
-                X_pool, Y_pool, X_test, Y_test,
-                feature_idx=A_idx, model_name="svm",
-            )
-            sum_d1 = summarize_results(raw_d1)
+        # d = 1
+        print(f"    d=1 (sensor A={sensors['A']}) ...")
+        raw_d1 = run_experiment(
+            X_pool, Y_pool, X_test, Y_test,
+            feature_idx=A_idx, model_name="svm",
+        )
+        sum_d1 = summarize_results(raw_d1)
 
-            # d = 2
-            print(f"    d=2 (sensors A={sensors['A']}, B={B_id}) ...")
-            raw_d2 = run_experiment(
-                X_pool, Y_pool, X_test, Y_test,
-                feature_idx=AB_idx, model_name="svm",
-            )
-            sum_d2 = summarize_results(raw_d2)
+        # d = 2
+        print(f"    d=2 (sensors A={sensors['A']}, B={B_id}) ...")
+        raw_d2 = run_experiment(
+            X_pool, Y_pool, X_test, Y_test,
+            feature_idx=AB_idx, model_name="svm",
+        )
+        sum_d2 = summarize_results(raw_d2)
 
-            # Crossover
-            n_star_list = estimate_crossover(sum_d1, sum_d2)
-            if n_star_list:
-                stars_str = ", ".join(f"{v:.1f}" for v in n_star_list)
-                print(f"    → Estimated crossover n* ≈ {stars_str}")
-            else:
-                print(f"    → No crossover detected in this range")
+        # Crossover
+        n_star_list = estimate_crossover(sum_d1, sum_d2)
+        if n_star_list:
+            stars_str = ", ".join(f"{v:.1f}" for v in n_star_list)
+            print(f"    → Estimated crossover n* ≈ {stars_str}")
+        else:
+            print(f"    → No crossover detected in this range")
 
-            summaries[scenario_name] = {"d1": sum_d1, "d2": sum_d2}
-            n_stars[scenario_name] = n_star_list
-            raw_results[scenario_name] = {"d1": raw_d1, "d2": raw_d2}
+        summaries[scenario_name] = {"d1": sum_d1, "d2": sum_d2}
+        n_stars[scenario_name] = n_star_list
+        raw_results[scenario_name] = {"d1": raw_d1, "d2": raw_d2}
 
     # ── Stage 10: Visualization ───────────────────────────────────────
     print("\n[8/8] Generating figures...")
