@@ -3,7 +3,7 @@ name: Deploy report to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: [docs/**]
+    paths: [results/**]
   workflow_dispatch:
 
 permissions:

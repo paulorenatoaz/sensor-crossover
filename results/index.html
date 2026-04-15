@@ -88,12 +88,13 @@ footer { margin-top: 3rem; padding-top: 1rem; border-top: 1px solid var(--border
 <h1>Finite-Sample Crossover in Sensor Classification</h1>
 <p class="subtitle">
     Intel Lab Dataset &mdash; Real-data validation of the fewer-features phenomenon<br>
-    Generated 2026-04-15 15:40
+    Generated 2026-04-15 15:57
 </p>
 
 <nav class="nav">
     <a href="#motivation">Motivation</a>
     <a href="#methodology">Methodology</a>
+    <a href="#modeling">Modeling</a>
     <a href="#setup">Setup</a>
     <a href="#summary">Summary</a>
     <a href="#results">Results</a>
@@ -193,6 +194,42 @@ to positive, the 2-sensor model begins to outperform the 1-sensor model, and
 vice versa.
 </p>
 
+<h2 id="modeling">Modeling</h2>
+
+<h3>Classifier</h3>
+<p>
+We use a <strong>linear Support Vector Machine</strong> (scikit-learn
+<code>LinearSVC</code>, C&thinsp;=&thinsp;1.0,
+max_iter&thinsp;=&thinsp;10000). A linear classifier is chosen
+deliberately: it is sensitive to the dimensionality of the feature space, making
+the crossover phenomenon visible even at low dimensions (d&thinsp;=&thinsp;1
+vs d&thinsp;=&thinsp;2). Non-linear kernels or ensemble methods would mask the
+effect by learning more flexible boundaries that tolerate extra features at
+small&nbsp;<em>n</em>.
+</p>
+
+<h3>Why not other classifiers?</h3>
+<p>
+Tree-based methods (Random Forest, Gradient Boosting) perform implicit feature
+selection, which suppresses the crossover. The SVM isolates exactly the
+estimation-cost mechanism we study.
+</p>
+
+<h3>Theoretical model for analysis</h3>
+<p>
+In the Analysis section, we fit the error difference to a second-order model:
+</p>
+<p style="text-align:center; font-size:1.1rem; margin:1rem 0;">
+    &Delta;(n) = G + B/n + C/n&sup2;
+</p>
+<p>
+This quadratic in 1/n captures the asymptotic gap <em>G</em>, the first-order
+finite-sample penalty <em>B</em>, and a curvature term <em>C</em> that can
+produce <strong>two roots</strong> (a double crossover) when its discriminant
+is positive. The model roots are reported separately from the interpolated
+<em>n*</em> to highlight the difference between the empirical crossing points
+and the parametric approximation.
+</p>
 
 <h2 id="setup">Experiment Setup</h2>
 
@@ -354,6 +391,16 @@ vice versa.
             <td class="positive">+0.0059</td>
         </tr>
 </tbody>
+    </table><h3>Quadratic Fit</h3>
+<table class="fit-table">
+        <tr><td>Model</td><td>&Delta;(n) = G + B/n + C/n&sup2;</td></tr>
+        <tr><td>G (asymptotic gap)</td><td>+0.002037</td></tr>
+        <tr><td>B (first-order)</td><td>-0.087721</td></tr>
+        <tr><td>C (second-order)</td><td>+0.0644</td></tr>
+        <tr><td>Discriminant B&sup2;&minus;4GC</td><td>0.007170</td></tr>
+        <tr><td>Crossover n*</td><td>42.3</td></tr>
+        <tr><td>Type</td><td><strong>Single crossover</strong></td></tr>
+        <tr><td>R&sup2;</td><td>0.9044</td></tr>
     </table></div>
 
 <div class="scenario-section">
@@ -426,6 +473,16 @@ vice versa.
             <td class="negative">-0.0049</td>
         </tr>
 </tbody>
+    </table><h3>Quadratic Fit</h3>
+<table class="fit-table">
+        <tr><td>Model</td><td>&Delta;(n) = G + B/n + C/n&sup2;</td></tr>
+        <tr><td>G (asymptotic gap)</td><td>-0.002185</td></tr>
+        <tr><td>B (first-order)</td><td>+0.076522</td></tr>
+        <tr><td>C (second-order)</td><td>-0.2070</td></tr>
+        <tr><td>Discriminant B&sup2;&minus;4GC</td><td>0.004047</td></tr>
+        <tr><td>Crossover n*</td><td>3.0, 32.1</td></tr>
+        <tr><td>Type</td><td><strong>Double crossover</strong></td></tr>
+        <tr><td>R&sup2;</td><td>0.7631</td></tr>
     </table></div>
 
 <div class="scenario-section">
@@ -498,6 +555,16 @@ vice versa.
             <td class="positive">+0.0175</td>
         </tr>
 </tbody>
+    </table><h3>Quadratic Fit</h3>
+<table class="fit-table">
+        <tr><td>Model</td><td>&Delta;(n) = G + B/n + C/n&sup2;</td></tr>
+        <tr><td>G (asymptotic gap)</td><td>+0.015160</td></tr>
+        <tr><td>B (first-order)</td><td>-0.203909</td></tr>
+        <tr><td>C (second-order)</td><td>+0.1311</td></tr>
+        <tr><td>Discriminant B&sup2;&minus;4GC</td><td>0.033627</td></tr>
+        <tr><td>Crossover n*</td><td>12.8</td></tr>
+        <tr><td>Type</td><td><strong>Single crossover</strong></td></tr>
+        <tr><td>R&sup2;</td><td>0.9962</td></tr>
     </table></div>
 
 <h2 id="comparison">Scenario Comparison</h2>
@@ -827,8 +894,43 @@ non-parametrically.
 </tr>
 </tbody></table>
 
+<h3>Parametric Model (Reference)</h3>
+<p>
+As a compact summary, the mean &Delta;(n) can be approximated by
+&Delta;(n)&nbsp;=&nbsp;G&nbsp;+&nbsp;B/n&nbsp;+&nbsp;C/n&sup2;.
+Two real positive roots of this quadratic in 1/n correspond to two
+crossover points.  The fitted coefficients are shown below.
+Note: the interpolated n* values reported elsewhere in this report are
+more accurate since they do not assume this parametric form.
+</p>
+<table class="data-table">
+    <thead><tr>
+        <th>Scenario</th><th>G</th><th>B</th><th>C</th>
+        <th>n* (model)</th><th>R&sup2;</th>
+    </tr></thead>
+    <tbody>
+<tr>
+            <td>high-correlation</td>
+            <td>+0.00204</td><td>-0.08772</td><td>+0.064</td>
+            <td>42.3</td>
+            <td>0.904</td>
+        </tr>
+<tr>
+            <td>mid-correlation</td>
+            <td>-0.00218</td><td>+0.07652</td><td>-0.207</td>
+            <td>3.0, 32.1</td>
+            <td>0.763</td>
+        </tr>
+<tr>
+            <td>low-correlation</td>
+            <td>+0.01516</td><td>-0.20391</td><td>+0.131</td>
+            <td>12.8</td>
+            <td>0.996</td>
+        </tr>
+</tbody></table>
+
 <footer>
-    Sensor Crossover Experiment Report &mdash; 2026-04-15 15:40<br>
+    Sensor Crossover Experiment Report &mdash; 2026-04-15 15:57<br>
     Config: 500 reps, n &isin; {2, 4, 8, 16, 32, 64, 128, 256, 512, 1024},
     SVM C=1.0, seed=42
 </footer>

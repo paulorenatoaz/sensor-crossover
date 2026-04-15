@@ -10,6 +10,8 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
+from src.experiment import fit_crossover_model as _fit_model_raw
+
 import config as cfg
 
 
@@ -22,6 +24,16 @@ def _img_to_base64(path: str) -> str:
     with open(path, "rb") as f:
         encoded = base64.b64encode(f.read()).decode("ascii")
     return f"data:{mime};base64,{encoded}"
+
+
+def _fit_crossover_model(df: pd.DataFrame, scenario: str):
+    """Fit Delta(n) = G + B/n + C/n^2 via the shared implementation in experiment.py."""
+    sc = df[(df["model"] == "svm") & (df["scenario"] == scenario)]
+    d1 = sc[sc["d"] == 1].sort_values("n").reset_index(drop=True)
+    d2 = sc[sc["d"] == 2].sort_values("n").reset_index(drop=True)
+    if len(d1) == 0 or len(d2) == 0:
+        return None
+    return _fit_model_raw(d1, d2)
 
 
 def _interpolate_crossover(df: pd.DataFrame, scenario: str) -> list[float]:
@@ -68,6 +80,27 @@ def _build_error_table_html(df: pd.DataFrame, scenario: str) -> str:
             <th>n</th><th>E(d=1)</th><th>E(d=2)</th><th>&Delta; (d=1 &minus; d=2)</th>
         </tr></thead>
         <tbody>{rows_html}</tbody>
+    </table>"""
+
+
+def _build_fit_table_html(fit_info: dict) -> str:
+    """Build HTML table showing quadratic fit details."""
+    if fit_info is None:
+        return "<p><em>Insufficient data for fit.</em></p>"
+
+    roots_str = ", ".join(f"{r:.1f}" for r in fit_info["roots"]) if fit_info["roots"] else "none in observable range"
+    n_crossings = len(fit_info["roots"])
+    ctype = {0: "No crossover", 1: "Single crossover", 2: "Double crossover"}.get(n_crossings, "?")
+
+    return f"""<table class="fit-table">
+        <tr><td>Model</td><td>&Delta;(n) = G + B/n + C/n&sup2;</td></tr>
+        <tr><td>G (asymptotic gap)</td><td>{fit_info['G']:+.6f}</td></tr>
+        <tr><td>B (first-order)</td><td>{fit_info['B']:+.6f}</td></tr>
+        <tr><td>C (second-order)</td><td>{fit_info['C']:+.4f}</td></tr>
+        <tr><td>Discriminant B&sup2;&minus;4GC</td><td>{fit_info['disc']:.6f}</td></tr>
+        <tr><td>Crossover n*</td><td>{roots_str}</td></tr>
+        <tr><td>Type</td><td><strong>{ctype}</strong></td></tr>
+        <tr><td>R&sup2;</td><td>{fit_info['r2']:.4f}</td></tr>
     </table>"""
 
 
@@ -199,6 +232,7 @@ def generate_report(
 <nav class="nav">
     <a href="#motivation">Motivation</a>
     <a href="#methodology">Methodology</a>
+    <a href="#modeling">Modeling</a>
     <a href="#setup">Setup</a>
     <a href="#summary">Summary</a>
     <a href="#results">Results</a>
@@ -298,6 +332,42 @@ to positive, the 2-sensor model begins to outperform the 1-sensor model, and
 vice versa.
 </p>
 
+<h2 id="modeling">Modeling</h2>
+
+<h3>Classifier</h3>
+<p>
+We use a <strong>linear Support Vector Machine</strong> (scikit-learn
+<code>LinearSVC</code>, C&thinsp;=&thinsp;{cfg.SVM_C},
+max_iter&thinsp;=&thinsp;{cfg.SVM_MAX_ITER}). A linear classifier is chosen
+deliberately: it is sensitive to the dimensionality of the feature space, making
+the crossover phenomenon visible even at low dimensions (d&thinsp;=&thinsp;1
+vs d&thinsp;=&thinsp;2). Non-linear kernels or ensemble methods would mask the
+effect by learning more flexible boundaries that tolerate extra features at
+small&nbsp;<em>n</em>.
+</p>
+
+<h3>Why not other classifiers?</h3>
+<p>
+Tree-based methods (Random Forest, Gradient Boosting) perform implicit feature
+selection, which suppresses the crossover. The SVM isolates exactly the
+estimation-cost mechanism we study.
+</p>
+
+<h3>Theoretical model for analysis</h3>
+<p>
+In the Analysis section, we fit the error difference to a second-order model:
+</p>
+<p style="text-align:center; font-size:1.1rem; margin:1rem 0;">
+    &Delta;(n) = G + B/n + C/n&sup2;
+</p>
+<p>
+This quadratic in 1/n captures the asymptotic gap <em>G</em>, the first-order
+finite-sample penalty <em>B</em>, and a curvature term <em>C</em> that can
+produce <strong>two roots</strong> (a double crossover) when its discriminant
+is positive. The model roots are reported separately from the interpolated
+<em>n*</em> to highlight the difference between the empirical crossing points
+and the parametric approximation.
+</p>
 """
 
     # ── Setup section ─────────────────────────────────────────────────
@@ -406,6 +476,7 @@ vice versa.
     html += '\n<h2 id="results">SVM Results by Scenario</h2>\n'
 
     for sc in scenarios:
+        fit = _fit_crossover_model(df, sc)
         interp_roots = _interpolate_crossover(df, sc)
         n_roots = len(interp_roots)
         badge_cls = {0: "badge-none", 1: "badge-single", 2: "badge-double"}.get(n_roots, "badge-double")
@@ -427,6 +498,10 @@ vice versa.
 
         # Error table
         html += _build_error_table_html(df, sc)
+
+        # Quadratic fit
+        html += "<h3>Quadratic Fit</h3>\n"
+        html += _build_fit_table_html(fit)
 
         html += "</div>\n"
 
@@ -527,6 +602,40 @@ non-parametrically.
     <td>{sig_str}</td>
 </tr>\n"""
             html += "</tbody></table>\n"
+
+
+
+    # ── Quadratic model (compact, kept for reference) ─────────────────
+    html += """
+<h3>Parametric Model (Reference)</h3>
+<p>
+As a compact summary, the mean &Delta;(n) can be approximated by
+&Delta;(n)&nbsp;=&nbsp;G&nbsp;+&nbsp;B/n&nbsp;+&nbsp;C/n&sup2;.
+Two real positive roots of this quadratic in 1/n correspond to two
+crossover points.  The fitted coefficients are shown below.
+Note: the interpolated n* values reported elsewhere in this report are
+more accurate since they do not assume this parametric form.
+</p>
+"""
+    html += """<table class="data-table">
+    <thead><tr>
+        <th>Scenario</th><th>G</th><th>B</th><th>C</th>
+        <th>n* (model)</th><th>R&sup2;</th>
+    </tr></thead>
+    <tbody>
+"""
+    for sc in scenarios:
+        fit = _fit_crossover_model(df, sc)
+        if fit is None:
+            continue
+        roots_str = ", ".join(f"{r:.1f}" for r in fit["roots"]) if fit["roots"] else "&mdash;"
+        html += f"""<tr>
+            <td>{sc}</td>
+            <td>{fit['G']:+.5f}</td><td>{fit['B']:+.5f}</td><td>{fit['C']:+.3f}</td>
+            <td>{roots_str}</td>
+            <td>{fit['r2']:.3f}</td>
+        </tr>\n"""
+    html += "</tbody></table>\n"
 
     # ── Footer ────────────────────────────────────────────────────────
     html += f"""
