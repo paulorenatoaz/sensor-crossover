@@ -10,8 +10,6 @@ from datetime import datetime
 import numpy as np
 import pandas as pd
 
-from src.experiment import fit_crossover_model as _fit_model_raw
-
 import config as cfg
 
 
@@ -24,16 +22,6 @@ def _img_to_base64(path: str) -> str:
     with open(path, "rb") as f:
         encoded = base64.b64encode(f.read()).decode("ascii")
     return f"data:{mime};base64,{encoded}"
-
-
-def _fit_crossover_model(df: pd.DataFrame, scenario: str):
-    """Fit Delta(n) = G + B/n + C/n^2 via the shared implementation in experiment.py."""
-    sc = df[(df["model"] == "svm") & (df["scenario"] == scenario)]
-    d1 = sc[sc["d"] == 1].sort_values("n").reset_index(drop=True)
-    d2 = sc[sc["d"] == 2].sort_values("n").reset_index(drop=True)
-    if len(d1) == 0 or len(d2) == 0:
-        return None
-    return _fit_model_raw(d1, d2)
 
 
 def _interpolate_crossover(df: pd.DataFrame, scenario: str) -> list[float]:
@@ -80,27 +68,6 @@ def _build_error_table_html(df: pd.DataFrame, scenario: str) -> str:
             <th>n</th><th>E(d=1)</th><th>E(d=2)</th><th>&Delta; (d=1 &minus; d=2)</th>
         </tr></thead>
         <tbody>{rows_html}</tbody>
-    </table>"""
-
-
-def _build_fit_table_html(fit_info: dict) -> str:
-    """Build HTML table showing quadratic fit details."""
-    if fit_info is None:
-        return "<p><em>Insufficient data for fit.</em></p>"
-
-    roots_str = ", ".join(f"{r:.1f}" for r in fit_info["roots"]) if fit_info["roots"] else "none in observable range"
-    n_crossings = len(fit_info["roots"])
-    ctype = {0: "No crossover", 1: "Single crossover", 2: "Double crossover"}.get(n_crossings, "?")
-
-    return f"""<table class="fit-table">
-        <tr><td>Model</td><td>&Delta;(n) = G + B/n + C/n&sup2;</td></tr>
-        <tr><td>G (asymptotic gap)</td><td>{fit_info['G']:+.6f}</td></tr>
-        <tr><td>B (first-order)</td><td>{fit_info['B']:+.6f}</td></tr>
-        <tr><td>C (second-order)</td><td>{fit_info['C']:+.4f}</td></tr>
-        <tr><td>Discriminant B&sup2;&minus;4GC</td><td>{fit_info['disc']:.6f}</td></tr>
-        <tr><td>Crossover n*</td><td>{roots_str}</td></tr>
-        <tr><td>Type</td><td><strong>{ctype}</strong></td></tr>
-        <tr><td>R&sup2;</td><td>{fit_info['r2']:.4f}</td></tr>
     </table>"""
 
 
@@ -237,7 +204,6 @@ def generate_report(
     <a href="#summary">Summary</a>
     <a href="#results">Results</a>
     <a href="#comparison">Comparison</a>
-    <a href="#analysis">Analysis</a>
     <a href="dataset.html">Dataset Report &rarr;</a>
 </nav>
 
@@ -346,27 +312,6 @@ effect by learning more flexible boundaries that tolerate extra features at
 small&nbsp;<em>n</em>.
 </p>
 
-<h3>Why not other classifiers?</h3>
-<p>
-Tree-based methods (Random Forest, Gradient Boosting) perform implicit feature
-selection, which suppresses the crossover. The SVM isolates exactly the
-estimation-cost mechanism we study.
-</p>
-
-<h3>Theoretical model for analysis</h3>
-<p>
-In the Analysis section, we fit the error difference to a second-order model:
-</p>
-<p style="text-align:center; font-size:1.1rem; margin:1rem 0;">
-    &Delta;(n) = G + B/n + C/n&sup2;
-</p>
-<p>
-This quadratic in 1/n captures the asymptotic gap <em>G</em>, the first-order
-finite-sample penalty <em>B</em>, and a curvature term <em>C</em> that can
-produce <strong>two roots</strong> (a double crossover) when its discriminant
-is positive. The model roots are reported separately from the interpolated
-<em>n*</em> to highlight the difference between the empirical crossing points
-and the parametric approximation.
 </p>
 """
 
@@ -476,7 +421,6 @@ and the parametric approximation.
     html += '\n<h2 id="results">SVM Results by Scenario</h2>\n'
 
     for sc in scenarios:
-        fit = _fit_crossover_model(df, sc)
         interp_roots = _interpolate_crossover(df, sc)
         n_roots = len(interp_roots)
         badge_cls = {0: "badge-none", 1: "badge-single", 2: "badge-double"}.get(n_roots, "badge-double")
@@ -499,10 +443,6 @@ and the parametric approximation.
         # Error table
         html += _build_error_table_html(df, sc)
 
-        # Quadratic fit
-        html += "<h3>Quadratic Fit</h3>\n"
-        html += _build_fit_table_html(fit)
-
         html += "</div>\n"
 
     # ── Comparison section ────────────────────────────────────────────
@@ -521,121 +461,6 @@ and the parametric approximation.
     if os.path.exists(fig_path):
         img_data = _img_to_base64(fig_path)
         html += f'<div class="figure-row single"><img src="{img_data}" alt="Correlation vs crossover"></div>\n'
-
-    # ── Analysis section ──────────────────────────────────────────────
-
-    # Load delta stats if available
-    dstats_path = os.path.join(cfg.TABLES_DIR, "delta_stats.csv")
-    dstats_df = None
-    if os.path.exists(dstats_path):
-        dstats_df = pd.read_csv(dstats_path)
-
-    html += """
-<h2 id="analysis">Analysis: Double Crossover</h2>
-
-<h3>Statistical Significance of Error Differences</h3>
-<p>
-For each sample size <em>n</em> and scenario, the paired error difference
-&Delta; = E(d=1) &minus; E(d=2) was computed on every Monte Carlo trial
-(same training subsample, same test set, different feature sets).
-The figure below shows the mean &Delta; with its 95% confidence interval.
-Points where the CI includes zero (non-significant) are marked with an
-open ring.  Wilcoxon signed-rank <em>p</em>-values confirm the results
-non-parametrically.
-</p>
-"""
-
-    # Delta CI figure
-    fig_path = os.path.join(figures_dir, "delta_ci.png")
-    if os.path.exists(fig_path):
-        img_data = _img_to_base64(fig_path)
-        html += f'<div class="figure-row single"><img src="{img_data}" alt="Delta with CI"></div>\n'
-
-    # Significance table per scenario
-    if dstats_df is not None:
-        for sc in scenarios:
-            sc_ds = dstats_df[dstats_df["scenario"] == sc].sort_values("n")
-            if sc_ds.empty:
-                continue
-            html += f"<h4>{sc.replace('-', ' ').title()}</h4>\n"
-            html += """<table class="data-table">
-<thead><tr>
-    <th>n</th>
-    <th>&Delta; mean</th>
-    <th>95% CI</th>
-    <th>Wilcoxon <em>p</em></th>
-    <th>Cohen's <em>d</em></th>
-    <th>d=2 wins</th>
-    <th>Significance</th>
-</tr></thead>
-<tbody>
-"""
-            for _, row in sc_ds.iterrows():
-                n_val = int(row["n"])
-                mean_d = row["mean_delta"]
-                ci_lo = row["ci_lo"]
-                ci_hi = row["ci_hi"]
-                p_val = row["p_value"]
-                cd = row["cohens_d"]
-                frac_w = row["frac_d2_wins"]
-
-                # Significance stars
-                if p_val < 0.001:
-                    sig_str = '<span style="color:#d62728;">***</span>'
-                elif p_val < 0.01:
-                    sig_str = '<span style="color:#d62728;">**</span>'
-                elif p_val < 0.05:
-                    sig_str = '<span style="color:#d62728;">*</span>'
-                else:
-                    sig_str = '<span style="color:#999;">n.s.</span>'
-
-                # Who wins
-                delta_cls = "positive" if mean_d > 0 else "negative"
-
-                html += f"""<tr>
-    <td>{n_val}</td>
-    <td class="{delta_cls}">{mean_d:+.4f}</td>
-    <td>[{ci_lo:+.4f}, {ci_hi:+.4f}]</td>
-    <td>{p_val:.4f}</td>
-    <td>{cd:+.3f}</td>
-    <td>{frac_w:.1%}</td>
-    <td>{sig_str}</td>
-</tr>\n"""
-            html += "</tbody></table>\n"
-
-
-
-    # ── Quadratic model (compact, kept for reference) ─────────────────
-    html += """
-<h3>Parametric Model (Reference)</h3>
-<p>
-As a compact summary, the mean &Delta;(n) can be approximated by
-&Delta;(n)&nbsp;=&nbsp;G&nbsp;+&nbsp;B/n&nbsp;+&nbsp;C/n&sup2;.
-Two real positive roots of this quadratic in 1/n correspond to two
-crossover points.  The fitted coefficients are shown below.
-Note: the interpolated n* values reported elsewhere in this report are
-more accurate since they do not assume this parametric form.
-</p>
-"""
-    html += """<table class="data-table">
-    <thead><tr>
-        <th>Scenario</th><th>G</th><th>B</th><th>C</th>
-        <th>n* (model)</th><th>R&sup2;</th>
-    </tr></thead>
-    <tbody>
-"""
-    for sc in scenarios:
-        fit = _fit_crossover_model(df, sc)
-        if fit is None:
-            continue
-        roots_str = ", ".join(f"{r:.1f}" for r in fit["roots"]) if fit["roots"] else "&mdash;"
-        html += f"""<tr>
-            <td>{sc}</td>
-            <td>{fit['G']:+.5f}</td><td>{fit['B']:+.5f}</td><td>{fit['C']:+.3f}</td>
-            <td>{roots_str}</td>
-            <td>{fit['r2']:.3f}</td>
-        </tr>\n"""
-    html += "</tbody></table>\n"
 
     # ── Footer ────────────────────────────────────────────────────────
     html += f"""
