@@ -231,6 +231,8 @@ def generate_report(
 
 <nav class="nav">
     <a href="#motivation">Motivation</a>
+    <a href="#methodology">Methodology</a>
+    <a href="#modeling">Modeling</a>
     <a href="#setup">Setup</a>
     <a href="#summary">Summary</a>
     <a href="#results">Results</a>
@@ -272,6 +274,102 @@ regimes &mdash; high, mid, and low &mdash; to answer:
     <li>Can a <strong>double crossover</strong> occur, where the 2-sensor model
         is first better, then worse, then better again?</li>
 </ol>
+
+<h2 id="methodology">Methodology</h2>
+
+<p>
+We frame the problem as a binary classification task derived from real sensor
+readings. The pipeline has four stages:
+</p>
+
+<h3>1. Data &amp; Label Construction</h3>
+<p>
+From the Intel Lab dataset (54 temperature motes, ~2.3&thinsp;M readings over
+38 days), we build a synchronized time&times;sensor matrix after removing
+outliers and filling small gaps (&le;&thinsp;3 consecutive NaNs). A
+<strong>reference mote R</strong> defines binary classes via a median split of
+its temperature readings: class&nbsp;0 if temperature &le; median, class&nbsp;1
+otherwise.
+</p>
+
+<h3>2. Sensor Role Assignment</h3>
+<p>
+Sensors are automatically assigned to roles based on pairwise Pearson
+correlation:
+</p>
+<ul>
+    <li><strong>A</strong> (primary feature) &mdash; the mote most correlated
+        with R (&rho; &ge; {cfg.CORR_A_MIN}).</li>
+    <li><strong>B<sub>high</sub></strong> &mdash; high correlation with A
+        (&rho;<sub>BA</sub> &ge; {cfg.CORR_B_HIGH_A_MIN}), acting as a
+        near-redundant second feature.</li>
+    <li><strong>B<sub>mid</sub></strong> &mdash; moderate range
+        ({cfg.CORR_B_MID_R_RANGE[0]} &le; &rho;<sub>BR</sub> &le;
+        {cfg.CORR_B_MID_R_RANGE[1]}), where the utility of the extra sensor
+        is ambiguous.</li>
+    <li><strong>B<sub>low</sub></strong> &mdash; low correlation
+        (&rho;<sub>BR</sub> &le; {cfg.CORR_B_LOW_R_MAX}), providing a
+        complementary but noisy feature.</li>
+</ul>
+
+<h3>3. Monte Carlo Evaluation</h3>
+<p>
+For each scenario (high / mid / low correlation) and dimensionality
+(<em>d</em>&thinsp;=&thinsp;1 using sensor A only, or
+<em>d</em>&thinsp;=&thinsp;2 using sensors A+B), we draw <em>n</em> training
+samples uniformly from the pool ({cfg.N_REPS} repetitions per setting). The
+classifier is evaluated on a fixed stratified hold-out set
+({int(cfg.TEST_FRACTION*100)}% of the data). We record the mean and standard
+deviation of classification error across repetitions.
+</p>
+
+<h3>4. Crossover Detection</h3>
+<p>
+The crossover point <em>n*</em> is estimated by linear interpolation: we
+compute &Delta;(n) = E(d=1) &minus; E(d=2) at each sample size and locate
+sign changes between consecutive points. Where &Delta; changes from negative
+to positive, the 2-sensor model begins to outperform the 1-sensor model, and
+vice versa.
+</p>
+
+<h2 id="modeling">Modeling</h2>
+
+<h3>Classifier</h3>
+<p>
+We use a <strong>linear Support Vector Machine</strong> (scikit-learn
+<code>LinearSVC</code>, C&thinsp;=&thinsp;{cfg.SVM_C},
+max_iter&thinsp;=&thinsp;{cfg.SVM_MAX_ITER}). A linear classifier is chosen
+deliberately: it is sensitive to the dimensionality of the feature space, making
+the crossover phenomenon visible even at low dimensions (d&thinsp;=&thinsp;1
+vs d&thinsp;=&thinsp;2). Non-linear kernels or ensemble methods would mask the
+effect by learning more flexible boundaries that tolerate extra features at
+small&nbsp;<em>n</em>.
+</p>
+
+<h3>Why not other classifiers?</h3>
+<p>
+LDA was considered but removed: its closed-form solution and built-in
+regularization make it largely insensitive to the 1-vs-2 feature
+distinction in this dataset. Tree-based methods (Random Forest, Gradient
+Boosting) perform implicit feature selection, which would also suppress the
+crossover. The SVM isolates exactly the estimation-cost mechanism we study.
+</p>
+
+<h3>Theoretical model for analysis</h3>
+<p>
+In the Analysis section, we fit the error difference to a second-order model:
+</p>
+<p style="text-align:center; font-size:1.1rem; margin:1rem 0;">
+    &Delta;(n) = G + B/n + C/n&sup2;
+</p>
+<p>
+This quadratic in 1/n captures the asymptotic gap <em>G</em>, the first-order
+finite-sample penalty <em>B</em>, and a curvature term <em>C</em> that can
+produce <strong>two roots</strong> (a double crossover) when its discriminant
+is positive. The model roots are reported separately from the interpolated
+<em>n*</em> to highlight the difference between the empirical crossing points
+and the parametric approximation.
+</p>
 """
 
     # ── Setup section ─────────────────────────────────────────────────
