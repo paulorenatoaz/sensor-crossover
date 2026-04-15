@@ -4,8 +4,6 @@
 import argparse
 import sys
 import os
-import shutil
-
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import config as cfg
 
@@ -17,28 +15,26 @@ def cmd_run(args):
 
 
 def cmd_publish(args):
-    """Copy HTML reports to docs/ for GitHub Pages."""
-    docs_dir = os.path.join(cfg.PROJECT_ROOT, "docs")
-    os.makedirs(docs_dir, exist_ok=True)
-
-    copied = []
+    """Stage HTML reports in results/ for GitHub Pages deployment."""
+    reports = []
     for name in ("index.html", "dataset.html"):
-        src = os.path.join(cfg.RESULTS_DIR, name)
-        if os.path.exists(src):
-            shutil.copy2(src, os.path.join(docs_dir, name))
-            copied.append(name)
+        path = os.path.join(cfg.RESULTS_DIR, name)
+        if os.path.exists(path):
+            reports.append(name)
 
-    if not copied:
+    if not reports:
         print("No HTML reports found in results/. Run the experiment first.")
         sys.exit(1)
 
-    # Create a minimal .nojekyll so GitHub Pages serves raw HTML
-    open(os.path.join(docs_dir, ".nojekyll"), "w").close()
+    # Ensure .nojekyll exists so GitHub Pages serves raw HTML
+    nojekyll = os.path.join(cfg.RESULTS_DIR, ".nojekyll")
+    if not os.path.exists(nojekyll):
+        open(nojekyll, "w").close()
 
-    print(f"Published {len(copied)} report(s) to docs/:")
-    for f in copied:
-        print(f"  docs/{f}")
-    print("\nPush to GitHub and enable Pages (source: docs/) to go live.")
+    print(f"Reports ready in results/ ({len(reports)} files):")
+    for f in reports:
+        print(f"  results/{f}")
+    print("\nCommit and push to deploy via GitHub Pages (source: results/).")
 
 
 def main():

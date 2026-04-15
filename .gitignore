@@ -10,10 +10,6 @@ results/figures/
 results/tables/
 results/metadata.json
 
-# Reports are regenerated; published copies live in docs/
-results/index.html
-results/dataset.html
-
 # OS / editor
 .DS_Store
 *.swp
