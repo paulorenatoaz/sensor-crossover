@@ -45,7 +45,7 @@ def main():
     sub = parser.add_subparsers(dest="command")
 
     sub.add_parser("run", help="Run the full experiment pipeline")
-    sub.add_parser("publish", help="Copy reports to docs/ for GitHub Pages")
+    sub.add_parser("publish", help="Verify reports are ready for GitHub Pages")
 
     args = parser.parse_args()
     if args.command is None:

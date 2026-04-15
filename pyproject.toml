@@ -1,0 +1,24 @@
+[project]
+name = "sensor-crossover"
+version = "0.1.0"
+description = "Finite-sample crossover in sensor classification"
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.21",
+    "pandas>=1.3",
+    "scikit-learn>=1.0",
+    "matplotlib>=3.5",
+    "scipy>=1.7",
+    "requests>=2.25",
+]
+
+[project.scripts]
+sensor-crossover = "cli:main"
+
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+py-modules = ["cli", "config", "run_experiment"]
+packages = ["src"]

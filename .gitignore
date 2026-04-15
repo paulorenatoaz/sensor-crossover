@@ -1,6 +1,7 @@
 # Byte-compiled / optimized
 __pycache__/
 *.py[cod]
+*.egg-info/
 
 # Raw data (downloaded at runtime)
 data/
