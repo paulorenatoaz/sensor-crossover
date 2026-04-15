@@ -20,10 +20,11 @@ from src.sensor_selection import select_all_sensors, compute_correlation_matrix
 from src.labeling import create_labels
 from src.experiment import (
     stratified_split, run_experiment, summarize_results, estimate_crossover,
-    _get_feature_indices,
+    compute_delta_stats, _get_feature_indices,
 )
 from src.plotting import (
     plot_crossover, plot_scenario_comparison, plot_correlation_vs_crossover,
+    plot_delta_with_ci,
 )
 from src.report import generate_report
 from src.dataset_report import generate_dataset_report
@@ -83,6 +84,7 @@ def main():
     summaries = {}
     n_stars = {}
     raw_results = {}
+    delta_stats = {}
 
     for scenario_name, B_id in scenarios.items():
         print(f"\n  ── Scenario: {scenario_name} ──")
@@ -113,9 +115,13 @@ def main():
         else:
             print(f"    → No crossover detected in this range")
 
+        # Paired delta statistics (Wilcoxon, CI)
+        dstats = compute_delta_stats(raw_d1, raw_d2)
+
         summaries[scenario_name] = {"d1": sum_d1, "d2": sum_d2}
         n_stars[scenario_name] = n_star_list
         raw_results[scenario_name] = {"d1": raw_d1, "d2": raw_d2}
+        delta_stats[scenario_name] = dstats
 
     # ── Stage 10: Visualization ───────────────────────────────────────
     print("\n[8/8] Generating figures...")
@@ -150,6 +156,23 @@ def main():
         corr_values, n_star_values, labels_list,
         save_path=os.path.join(cfg.FIGURES_DIR, "corr_vs_crossover.pdf"),
     )
+
+    # Plot 4 — Delta with confidence intervals
+    plot_delta_with_ci(
+        delta_stats,
+        n_stars=n_stars,
+        save_path=os.path.join(cfg.FIGURES_DIR, "delta_ci.pdf"),
+    )
+
+    # ── Save delta_stats ──────────────────────────────────────────────
+    dstats_rows = []
+    for sc_name, dstats_df in delta_stats.items():
+        for _, row in dstats_df.iterrows():
+            dstats_rows.append({"scenario": sc_name, **row.to_dict()})
+    dstats_all = pd.DataFrame(dstats_rows)
+    dstats_path = os.path.join(cfg.TABLES_DIR, "delta_stats.csv")
+    dstats_all.to_csv(dstats_path, index=False)
+    print(f"Delta stats saved to {dstats_path}")
 
     # ── Summary table ─────────────────────────────────────────────────
     print("\n" + "=" * 60)

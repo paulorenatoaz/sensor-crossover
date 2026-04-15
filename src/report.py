@@ -525,41 +525,183 @@ and the parametric approximation.
         html += f'<div class="figure-row single"><img src="{img_data}" alt="Correlation vs crossover"></div>\n'
 
     # ── Analysis section ──────────────────────────────────────────────
+
+    # Load delta stats if available
+    dstats_path = os.path.join(cfg.TABLES_DIR, "delta_stats.csv")
+    dstats_df = None
+    if os.path.exists(dstats_path):
+        dstats_df = pd.read_csv(dstats_path)
+
     html += """
 <h2 id="analysis">Analysis: Double Crossover</h2>
 
+<h3>Statistical Significance of Error Differences</h3>
 <p>
-The standard learning-curve model <code>E(n) = &alpha; + &beta;/n</code> predicts at most
-<strong>one</strong> crossover between the d=1 and d=2 error curves.
-However, the mid-correlation scenario exhibits a <strong>double crossover</strong> in SVM,
-where the error difference &Delta;(n) = E<sub>1</sub>(n) &minus; E<sub>2</sub>(n) changes sign twice.
+For each sample size <em>n</em> and scenario, the paired error difference
+&Delta; = E(d=1) &minus; E(d=2) was computed on every Monte Carlo trial
+(same training subsample, same test set, different feature sets).
+The figure below shows the mean &Delta; with its 95% confidence interval.
+Points where the CI includes zero (non-significant) are marked with an
+open ring.  Wilcoxon signed-rank <em>p</em>-values confirm the results
+non-parametrically.
 </p>
-
-<p>
-This is explained by extending the model to second order:
-</p>
-<p style="text-align:center; font-size:1.1rem; margin:1rem 0;">
-    &Delta;(n) = G + B/n + C/n&sup2;
-</p>
-<p>
-Setting &Delta;(n) = 0 with x = 1/n gives a quadratic <em>Cx&sup2; + Bx + G = 0</em>.
-The <strong>double crossover conditions</strong> are:
-</p>
-<ul>
-    <li>B&sup2; &minus; 4GC &gt; 0 (two real roots)</li>
-    <li>sign(G) = sign(C) (both roots same sign)</li>
-    <li>sign(B) &ne; sign(G) (both roots positive &rArr; n* &gt; 0)</li>
-    <li>|G/C| small enough for both n* in the observable range</li>
-</ul>
 """
 
-    # Unified fit table
+    # Delta CI figure
+    fig_path = os.path.join(figures_dir, "delta_ci.png")
+    if os.path.exists(fig_path):
+        img_data = _img_to_base64(fig_path)
+        html += f'<div class="figure-row single"><img src="{img_data}" alt="Delta with CI"></div>\n'
+
+    # Significance table per scenario
+    if dstats_df is not None:
+        for sc in scenarios:
+            sc_ds = dstats_df[dstats_df["scenario"] == sc].sort_values("n")
+            if sc_ds.empty:
+                continue
+            html += f"<h4>{sc.replace('-', ' ').title()}</h4>\n"
+            html += """<table class="data-table">
+<thead><tr>
+    <th>n</th>
+    <th>&Delta; mean</th>
+    <th>95% CI</th>
+    <th>Wilcoxon <em>p</em></th>
+    <th>Cohen's <em>d</em></th>
+    <th>d=2 wins</th>
+    <th>Significance</th>
+</tr></thead>
+<tbody>
+"""
+            for _, row in sc_ds.iterrows():
+                n_val = int(row["n"])
+                mean_d = row["mean_delta"]
+                ci_lo = row["ci_lo"]
+                ci_hi = row["ci_hi"]
+                p_val = row["p_value"]
+                cd = row["cohens_d"]
+                frac_w = row["frac_d2_wins"]
+
+                # Significance stars
+                if p_val < 0.001:
+                    sig_str = '<span style="color:#d62728;">***</span>'
+                elif p_val < 0.01:
+                    sig_str = '<span style="color:#d62728;">**</span>'
+                elif p_val < 0.05:
+                    sig_str = '<span style="color:#d62728;">*</span>'
+                else:
+                    sig_str = '<span style="color:#999;">n.s.</span>'
+
+                # Who wins
+                delta_cls = "positive" if mean_d > 0 else "negative"
+
+                html += f"""<tr>
+    <td>{n_val}</td>
+    <td class="{delta_cls}">{mean_d:+.4f}</td>
+    <td>[{ci_lo:+.4f}, {ci_hi:+.4f}]</td>
+    <td>{p_val:.4f}</td>
+    <td>{cd:+.3f}</td>
+    <td>{frac_w:.1%}</td>
+    <td>{sig_str}</td>
+</tr>\n"""
+            html += "</tbody></table>\n"
+
+    # ── Narrative interpretation ──────────────────────────────────────
     html += """
-<h3>Quadratic Fit Summary (all scenarios)</h3>
-<table class="summary-table">
+<h3>Interpretation</h3>
+
+<p>
+The error difference &Delta;(n) = E(d=1) &minus; E(d=2) captures the <strong>net
+benefit of adding a second sensor</strong> at each sample size.
+Positive &Delta; means d=2 outperforms d=1; negative means d=1 is better
+alone.  The three scenarios produce qualitatively different trajectories
+because of how the bias&ndash;variance tradeoff interacts with the
+correlation structure of sensor B.
+</p>
+
+<h4>Regime 1 &mdash; Small <em>n</em>: variance dominates</h4>
+<p>
+With very few training samples, estimating a decision boundary in 2-D
+requires fitting twice as many effective parameters as in 1-D.
+The additional estimation variance overwhelms whatever signal sensor B
+provides, so d=1 tends to match or beat d=2 at the smallest sample sizes.
+This effect is visible in all three scenarios at n&nbsp;=&nbsp;2 and is
+strongest where B is least informative (high-correlation, where B is
+nearly redundant with A).
+</p>
+
+<h4>Regime 2 &mdash; Moderate <em>n</em>: signal emerges</h4>
+<p>
+As <em>n</em> grows, the variance cost of the extra dimension falls as
+O(1/n).  Once enough samples are available to reliably estimate the 2-D
+boundary, the additional label-relevant information in B begins to help.
+In the low-correlation scenario, B is largely independent of A, so the
+benefit is large and persistent.
+In the mid-correlation scenario, the benefit is real but modest, because
+B&rsquo;s signal partially overlaps with A&rsquo;s.
+</p>
+
+<h4>Regime 3 &mdash; Large <em>n</em>: asymptotic bias</h4>
+<p>
+When <em>n</em> is large enough that variance is negligible, the
+<strong>irreducible error of the model class</strong> determines performance.
+A linear SVM draws a hyperplane; in 1-D this is a simple threshold on
+sensor A, which is highly correlated with the reference sensor R.
+Adding sensor B forces the hyperplane to operate in 2-D, where the
+optimal linear boundary must compromise between A&rsquo;s strong signal and
+B&rsquo;s weaker or partially redundant signal.
+</p>
+<p>
+In the mid-correlation scenario, this compromise produces a slightly
+<strong>worse</strong> asymptotic boundary than the 1-D threshold.
+Consequently &Delta; turns negative at large <em>n</em>, creating the
+<strong>second crossover</strong>.
+For low-correlation, B contributes enough independent information that
+the 2-D boundary remains better than 1-D even asymptotically &mdash;
+only a single crossover occurs.
+For high-correlation, B is so similar to A that the asymptotic boundary
+is barely affected and the only crossover is due to the small-<em>n</em>
+variance effect.
+</p>
+
+<h4>Conditions for a Double Crossover</h4>
+<p>
+A double crossover requires two ingredients:
+</p>
+<ol>
+    <li><strong>Variance-induced advantage for d=1 at small n</strong>
+    &mdash; always present because estimation variance scales with
+    dimensionality.</li>
+    <li><strong>Asymptotic bias favouring d=1 at large n</strong> &mdash;
+    occurs when the linear SVM&rsquo;s optimal 2-D hyperplane is a worse
+    approximation of the true decision boundary than its 1-D threshold.
+    This happens when sensor B is moderately correlated with both A and R:
+    informative enough to pull the boundary off its optimal 1-D direction,
+    but not informative enough to improve it.</li>
+</ol>
+<p>
+When both conditions hold, &Delta;(n) starts negative (d=1 better),
+turns positive in the middle range (d=2 better), and returns to negative
+(d=1 better again).  The mid-correlation scenario is the only one where
+B occupies this &ldquo;ambiguous utility&rdquo; zone.
+</p>
+"""
+
+    # ── Quadratic model (compact, kept for reference) ─────────────────
+    html += """
+<h3>Parametric Model (Reference)</h3>
+<p>
+As a compact summary, the mean &Delta;(n) can be approximated by
+&Delta;(n)&nbsp;=&nbsp;G&nbsp;+&nbsp;B/n&nbsp;+&nbsp;C/n&sup2;.
+Two real positive roots of this quadratic in 1/n correspond to two
+crossover points.  The fitted coefficients are shown below.
+Note: the interpolated n* values reported elsewhere in this report are
+more accurate since they do not assume this parametric form.
+</p>
+"""
+    html += """<table class="data-table">
     <thead><tr>
         <th>Scenario</th><th>G</th><th>B</th><th>C</th>
-        <th>n* (model)</th><th>Type</th><th>R&sup2;</th>
+        <th>n* (model)</th><th>R&sup2;</th>
     </tr></thead>
     <tbody>
 """
@@ -567,15 +709,11 @@ The <strong>double crossover conditions</strong> are:
         fit = _fit_crossover_model(df, sc)
         if fit is None:
             continue
-        n_roots = len(fit["roots"])
-        ctype = {0: "None", 1: "Single", 2: "Double"}[n_roots]
-        badge_cls = {0: "badge-none", 1: "badge-single", 2: "badge-double"}[n_roots]
         roots_str = ", ".join(f"{r:.1f}" for r in fit["roots"]) if fit["roots"] else "&mdash;"
         html += f"""<tr>
             <td>{sc}</td>
             <td>{fit['G']:+.5f}</td><td>{fit['B']:+.5f}</td><td>{fit['C']:+.3f}</td>
             <td>{roots_str}</td>
-            <td><span class="badge {badge_cls}">{ctype}</span></td>
             <td>{fit['r2']:.3f}</td>
         </tr>\n"""
     html += "</tbody></table>\n"

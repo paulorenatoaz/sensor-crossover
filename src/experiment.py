@@ -5,6 +5,7 @@
 import warnings
 import numpy as np
 import pandas as pd
+from scipy.stats import wilcoxon
 from sklearn.svm import LinearSVC
 from sklearn.model_selection import train_test_split
 
@@ -196,3 +197,49 @@ def estimate_crossover(
             crossings.append(round(float(n_star), 1))
 
     return sorted(crossings)
+
+
+def compute_delta_stats(
+    raw_d1: pd.DataFrame, raw_d2: pd.DataFrame
+) -> pd.DataFrame:
+    """Compute paired Δ statistics at each sample size.
+
+    Parameters
+    ----------
+    raw_d1, raw_d2 : DataFrames from run_experiment() with [n, rep, error].
+        Both must use the same (n, rep) pairs (shared RNG seed).
+
+    Returns
+    -------
+    DataFrame with columns:
+        n, mean_delta, std_delta, ci_lo, ci_hi, p_value, cohens_d,
+        frac_d2_wins
+    """
+    merged = raw_d1.merge(raw_d2, on=["n", "rep"], suffixes=("_d1", "_d2"))
+    merged["delta"] = merged["error_d1"] - merged["error_d2"]
+
+    records = []
+    for n_val, grp in merged.groupby("n"):
+        deltas = grp["delta"].values
+        mean_d = deltas.mean()
+        std_d = deltas.std(ddof=1)
+        se = std_d / np.sqrt(len(deltas))
+
+        # Wilcoxon signed-rank test (paired, nonparametric)
+        try:
+            _, p_val = wilcoxon(deltas)
+        except ValueError:
+            p_val = 1.0
+
+        records.append({
+            "n": int(n_val),
+            "mean_delta": mean_d,
+            "std_delta": std_d,
+            "ci_lo": mean_d - 1.96 * se,
+            "ci_hi": mean_d + 1.96 * se,
+            "p_value": p_val,
+            "cohens_d": mean_d / std_d if std_d > 0 else 0.0,
+            "frac_d2_wins": float((deltas > 0).sum()) / len(deltas),
+        })
+
+    return pd.DataFrame(records)
