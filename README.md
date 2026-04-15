@@ -4,7 +4,7 @@ Empirical validation of the **fewer-features phenomenon**: when training data
 is scarce, a classifier using *one* sensor can outperform a classifier using
 *two*, even though the extra sensor carries useful information.
 
-**[View the experiment report →](https://paulorenatoaz.github.io/sensor-crossover/)**
+**[Results Report →](https://paulorenatoaz.github.io/sensor-crossover/)** · **[Dataset Preprocess Report →](https://paulorenatoaz.github.io/sensor-crossover/dataset.html)**
 
 *(Enable GitHub Pages in repo settings → Source → GitHub Actions)*
 
