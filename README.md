@@ -6,6 +6,8 @@ is scarce, a classifier using *one* sensor can outperform a classifier using
 
 **[View the experiment report →](https://paulorenatoaz.github.io/sensor-crossover/)**
 
+*(Enable GitHub Pages in repo settings → Source → GitHub Actions)*
+
 ## Key findings
 
 | Scenario | Correlation ρ(B,R) | Crossover n* | Type |
@@ -14,11 +16,8 @@ is scarce, a classifier using *one* sensor can outperform a classifier using
 | Mid-correlation | 0.66 | 4, 78 | Double |
 | Low-correlation | 0.38 | 14 | Single |
 
-- At small *n*, the 2-sensor (d=2) SVM suffers from higher variance and is
-  outperformed by the 1-sensor (d=1) model.
 - The crossover point *n\** depends on the correlation structure between sensors.
-- The **mid-correlation** scenario exhibits a rare *double crossover*,
-  explained by a second-order model Δ(n) = G + B/n + C/n².
+- The **mid-correlation** scenario exhibits a rare *double crossover*.
 
 ## Quick start
 
