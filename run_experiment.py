@@ -264,6 +264,7 @@ def main():
         n_raw_readings=n_raw_readings,
         n_epochs_before=n_epochs_before,
         n_epochs_after=len(matrix),
+        Y=Y,
     )
 
     print("\n✓ Done. Figures in", cfg.FIGURES_DIR)

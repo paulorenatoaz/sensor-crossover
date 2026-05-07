@@ -128,7 +128,213 @@ def _make_temp_distribution(matrix: pd.DataFrame, selected: dict) -> str:
     return _fig_to_base64(fig)
 
 
+def _cov_to_corr(cov: np.ndarray) -> np.ndarray:
+    """Convert a covariance matrix to a correlation matrix.
+
+    Args:
+        cov: Symmetric covariance matrix.
+
+    Returns:
+        Correlation matrix with the same shape.
+    """
+    sd = np.sqrt(np.diag(cov))
+    outer = np.outer(sd, sd)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        corr = cov / outer
+    corr[~np.isfinite(corr)] = 0.0
+    return corr
+
+
+def _pair_class_conditional_stats(matrix: pd.DataFrame, Y: pd.Series,
+                                   sensor_1: int, sensor_2: int) -> dict:
+    """Compute class-conditional statistics for a pair of sensors.
+
+    Computes global moments, per-class moments, the between-class and pooled
+    within-class covariance matrices, validates the covariance decomposition
+    (global = within + between), and returns simulator-ready parameters.
+
+    Args:
+        matrix: Epoch x sensor DataFrame of temperature readings.
+        Y: Binary labels (0 or 1) aligned with ``matrix`` index.
+        sensor_1: Mote ID of the first sensor in the pair.
+        sensor_2: Mote ID of the second sensor in the pair.
+
+    Returns:
+        Dictionary with global, per-class, between, within, decomposition,
+        and within-class correlation diagnostics.
+    """
+    X = matrix[[sensor_1, sensor_2]].to_numpy()
+    y = Y.reindex(matrix.index).to_numpy()
+
+    mask0 = (y == 0)
+    mask1 = (y == 1)
+    n0, n1 = int(mask0.sum()), int(mask1.sum())
+    n_tot = n0 + n1
+    p0, p1 = n0 / n_tot, n1 / n_tot
+
+    mu_global = X.mean(axis=0)
+    sd_global = X.std(axis=0, ddof=0)
+    cov_global = np.cov(X, rowvar=False, ddof=0)
+    corr_global = _cov_to_corr(cov_global)
+
+    mu_0 = X[mask0].mean(axis=0)
+    mu_1 = X[mask1].mean(axis=0)
+    cov_0 = np.cov(X[mask0], rowvar=False, ddof=0)
+    cov_1 = np.cov(X[mask1], rowvar=False, ddof=0)
+
+    delta_mu = mu_1 - mu_0
+    between_cov = p0 * p1 * np.outer(delta_mu, delta_mu)
+    within_cov = p0 * cov_0 + p1 * cov_1
+
+    decomposition_error = cov_global - (within_cov + between_cov)
+    max_abs_err = float(np.max(np.abs(decomposition_error)))
+
+    sigma_within = np.sqrt(np.diag(within_cov))
+    within_corr = _cov_to_corr(within_cov)
+    rho_within = float(within_corr[0, 1])
+
+    return {
+        "sensor_1": sensor_1,
+        "sensor_2": sensor_2,
+        "n_total": n_tot, "n_class_0": n0, "n_class_1": n1,
+        "p0": p0, "p1": p1,
+        "mu_global": mu_global,
+        "sd_global": sd_global,
+        "cov_global": cov_global,
+        "corr_global": corr_global,
+        "rho_global": float(corr_global[0, 1]),
+        "mu_0": mu_0, "mu_1": mu_1,
+        "cov_0": cov_0, "cov_1": cov_1,
+        "between_cov": between_cov,
+        "within_cov": within_cov,
+        "within_corr": within_corr,
+        "decomposition_error": decomposition_error,
+        "max_decomposition_error": max_abs_err,
+        "sigma_within": sigma_within,
+        "rho_within": rho_within,
+    }
+
+
+def _matrix_to_html(M: np.ndarray, fmt: str = "{:+.4f}") -> str:
+    """Render a small numeric matrix as an HTML table."""
+    rows = "".join(
+        "<tr>" + "".join(f"<td>{fmt.format(v)}</td>" for v in row) + "</tr>"
+        for row in M
+    )
+    return f'<table class="fit-table mini-matrix">{rows}</table>'
+
+
+def _build_class_conditional_section_html(matrix: pd.DataFrame, Y: pd.Series,
+                                           selected: dict) -> str:
+    """Build the HTML for the class-conditional statistics section.
+
+    Args:
+        matrix: Epoch x sensor DataFrame.
+        Y: Binary labels aligned with ``matrix`` index.
+        selected: Mapping of role keys (R, A, B_high_corr, ...) to mote IDs.
+
+    Returns:
+        HTML string.
+    """
+    A_id = selected["A"]
+    pairs = [
+        ("intel_high_within", "A + B_high", A_id, selected["B_high_corr"]),
+        ("intel_mid_within",  "A + B_mid",  A_id, selected["B_mid_corr"]),
+        ("intel_low_within",  "A + B_low",  A_id, selected["B_low_corr"]),
+    ]
+
+    results = [(key, label, _pair_class_conditional_stats(matrix, Y, s1, s2))
+               for key, label, s1, s2 in pairs]
+
+    html = """
+<h2 id="class-conditional">Class-Conditional Statistics for SLACGS Mapping</h2>
+
+<p>
+Global covariance and correlation describe the full dataset after mixing both classes.
+In contrast, within-class covariance and correlation describe the dispersion structure
+inside each class. Since the SLACGS Gaussian simulator uses class-conditional covariance,
+the simulator-ready parameters should be derived from the pooled within-class covariance,
+not from the global covariance.
+</p>
+
+<h3>Summary &mdash; Global vs. Within-Class</h3>
+<table class="stats-table">
+<thead><tr>
+    <th>Scenario</th><th>Sensor 1</th><th>Sensor 2</th>
+    <th>&sigma;<sub>1</sub><sup>global</sup></th>
+    <th>&sigma;<sub>2</sub><sup>global</sup></th>
+    <th>&rho;<sup>global</sup></th>
+    <th>&sigma;<sub>1</sub><sup>within</sup></th>
+    <th>&sigma;<sub>2</sub><sup>within</sup></th>
+    <th>&rho;<sup>within</sup></th>
+    <th>max |&Delta;<sub>decomp</sub>|</th>
+</tr></thead>
+<tbody>
+"""
+    for key, label, r in results:
+        html += (
+            f"<tr><td>{label}</td>"
+            f"<td>mote {r['sensor_1']}</td><td>mote {r['sensor_2']}</td>"
+            f"<td>{r['sd_global'][0]:.4f}</td><td>{r['sd_global'][1]:.4f}</td>"
+            f"<td>{r['rho_global']:+.4f}</td>"
+            f"<td>{r['sigma_within'][0]:.4f}</td><td>{r['sigma_within'][1]:.4f}</td>"
+            f"<td>{r['rho_within']:+.4f}</td>"
+            f"<td>{r['max_decomposition_error']:.2e}</td></tr>\n"
+        )
+    html += "</tbody></table>\n"
+
+    # Simulator-ready block
+    html += "<h3>Simulator-Ready Parameters</h3>\n"
+    html += ("<p>Each entry encodes "
+             "<code>[sigma_1_within, sigma_2_within, rho_within]</code>, "
+             "ready to instantiate a SLACGS Gaussian scenario whose covariance "
+             "matches the within-class structure of the real data.</p>\n")
+    html += '<pre style="background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:6px;overflow-x:auto;font-size:0.85rem;">'
+    html += "REAL_LIKE_WITHIN_SCENARIOS = {\n"
+    for key, label, r in results:
+        html += (
+            f'    "{key}": [{r["sigma_within"][0]:.6f}, '
+            f'{r["sigma_within"][1]:.6f}, {r["rho_within"]:+.6f}],\n'
+        )
+    html += "}"
+    html += "</pre>\n"
+
+    # Per-pair detail blocks
+    for key, label, r in results:
+        html += f"""
+<div class="scenario-section">
+    <h3>{label} &mdash; mote {r['sensor_1']} &amp; mote {r['sensor_2']}</h3>
+    <table class="fit-table">
+        <tr><td>Class proportions (p<sub>0</sub>, p<sub>1</sub>)</td>
+            <td>{r['p0']:.4f}, {r['p1']:.4f} &nbsp; (n<sub>0</sub>={r['n_class_0']:,}, n<sub>1</sub>={r['n_class_1']:,})</td></tr>
+        <tr><td>&mu;<sub>global</sub></td>
+            <td>[{r['mu_global'][0]:+.4f}, {r['mu_global'][1]:+.4f}]</td></tr>
+        <tr><td>&mu;<sub>0</sub></td>
+            <td>[{r['mu_0'][0]:+.4f}, {r['mu_0'][1]:+.4f}]</td></tr>
+        <tr><td>&mu;<sub>1</sub></td>
+            <td>[{r['mu_1'][0]:+.4f}, {r['mu_1'][1]:+.4f}]</td></tr>
+        <tr><td>&rho;<sup>global</sup></td><td>{r['rho_global']:+.4f}</td></tr>
+        <tr><td>&rho;<sup>within</sup></td><td>{r['rho_within']:+.4f}</td></tr>
+        <tr><td>max |global &minus; (within + between)|</td>
+            <td>{r['max_decomposition_error']:.3e}</td></tr>
+    </table>
+
+    <div style="display:flex; flex-wrap:wrap; gap:1.2rem; margin-top:0.8rem;">
+        <div><strong>Global covariance</strong>{_matrix_to_html(r['cov_global'])}</div>
+        <div><strong>Within-class covariance</strong>{_matrix_to_html(r['within_cov'])}</div>
+        <div><strong>Global correlation</strong>{_matrix_to_html(r['corr_global'])}</div>
+        <div><strong>Within-class correlation</strong>{_matrix_to_html(r['within_corr'])}</div>
+    </div>
+</div>
+"""
+    return html
+
+
 EXTRA_CSS = """
+.mini-matrix { font-family: 'JetBrains Mono', 'Menlo', monospace; font-size: 0.78rem; margin-top: 0.3rem; }
+.mini-matrix td { padding: 0.25rem 0.55rem; text-align: right; }
+"""
+EXTRA_CSS += """
 .highlight-row { background: #eff6ff !important; font-weight: 600; }
 .stats-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.82rem; }
 .stats-table th, .stats-table td {
@@ -157,6 +363,7 @@ def generate_dataset_report(
     n_epochs_before: int,
     n_epochs_after: int,
     output_path: str | None = None,
+    Y: pd.Series | None = None,
 ):
     """Generate a self-contained HTML dataset report.
 
@@ -214,6 +421,7 @@ def generate_dataset_report(
     <a href="#correlations">Correlations</a>
     <a href="#selection">Selection</a>
     <a href="#selected">Selected Sensors</a>
+    <a href="#class-conditional">Class-Conditional</a>
 </nav>
 
 <h2 id="source">Data Source</h2>
@@ -449,6 +657,12 @@ The goal is to create three experimental scenarios with different levels of feat
     </table>
 </div>
 """
+
+    # Class-conditional statistics for SLACGS mapping
+    if Y is None:
+        from src.labeling import create_labels
+        Y, _ = create_labels(matrix, selected["R"])
+    html += _build_class_conditional_section_html(matrix, Y, selected)
 
     # Footer
     html += f"""

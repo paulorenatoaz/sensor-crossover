@@ -1,0 +1,806 @@
+% ============================================================================
+% De Modelos Sintéticos a Dados Reais — Validação Empírica com Datasets Públicos
+% Beamer presentation – Portuguese (pt-BR)
+% ============================================================================
+\documentclass[aspectratio=169, 11pt]{beamer}
+
+% ---------- Encoding & Language ----------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[brazil]{babel}
+
+% ---------- Theme ----------
+\usetheme{Madrid}
+\usecolortheme{whale}
+\setbeamertemplate{navigation symbols}{}
+\setbeamertemplate{footline}{%
+  \leavevmode%
+  \hbox{%
+    \begin{beamercolorbox}[wd=.333\paperwidth,ht=2.5ex,dp=1ex,center]{author in head/foot}%
+      \usebeamerfont{author in head/foot}\insertshortauthor
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.333\paperwidth,ht=2.5ex,dp=1ex,center]{title in head/foot}%
+      \usebeamerfont{title in head/foot}\insertshorttitle
+    \end{beamercolorbox}%
+    \begin{beamercolorbox}[wd=.333\paperwidth,ht=2.5ex,dp=1ex,right]{date in head/foot}%
+      \usebeamerfont{date in head/foot}\insertshortdate{}\hspace*{2em}
+      \insertframenumber{} / \inserttotalframenumber\hspace*{2ex}
+    \end{beamercolorbox}}%
+  \vskip0pt%
+}
+
+% ---------- Packages ----------
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{arrows.meta, positioning, shapes.geometric, calc}
+\usepackage{multirow}
+\usepackage{colortbl}
+\usepackage{xcolor}
+\usepackage{hyperref}
+
+% ---------- Custom colors ----------
+\definecolor{accent}{RGB}{37, 99, 235}
+\definecolor{greenok}{RGB}{22, 163, 74}
+\definecolor{redbad}{RGB}{220, 38, 38}
+\definecolor{lightbg}{RGB}{248, 250, 252}
+\definecolor{midblue}{RGB}{59, 130, 246}
+
+% ---------- Meta ----------
+\title[Modelos Sintéticos → Dados Reais]{%
+  De modelos sintéticos a dados reais:\\[4pt]
+  \large validação empírica em redes de sensores}
+\author{Sensor Crossover \quad$\bullet$\quad Sunrise CPD}
+\date{2026}
+\institute{}
+
+% ============================================================================
+\begin{document}
+
+% ============================================================================
+% SLIDE 1 --- Título
+% ============================================================================
+\begin{frame}[plain]
+\titlepage
+\vspace{-1.5em}
+\begin{center}
+\small
+\textcolor{gray}{%
+  Modelos sintéticos guiam a teoria $\bullet$
+  dados reais testam suas hipóteses}
+\end{center}
+\end{frame}
+
+% ============================================================================
+% SLIDE 2 --- Motivação original: artigo rejeitado
+% ============================================================================
+\begin{frame}{Motivação original --- o artigo rejeitado}
+
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+
+\textbf{Ponto de partida}
+\begin{itemize}
+  \item Linha teórica sobre aprendizado com \textbf{poucas amostras}
+        e \textbf{poucas \textit{features}}.
+  \item Modelos gaussianos sintéticos com classificadores lineares / SVM.
+  \item Submissão a periódico: \textbf{rejeitada}~\textcolor{redbad}{$\times$}.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{O que a rejeição indicou}
+\begin{itemize}
+  \item A crítica \emph{não} invalida o modelo.
+  \item Aponta uma \textbf{fragilidade}: falta de validação em
+        dados reais.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.44\textwidth}
+
+\begin{block}{Mensagem}
+\centering
+O objetivo agora é transformar uma\\
+\textbf{crítica dos revisores} em\\
+uma \textbf{agenda experimental}.
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 3 --- O que os revisores cobravam
+% ============================================================================
+\begin{frame}{O que os revisores cobravam}
+
+\begin{center}
+\small
+\begin{tabular}{@{}p{5.0cm}p{7.0cm}@{}}
+  \toprule
+  \textbf{Crítica} & \textbf{Resposta do projeto} \\
+  \midrule
+  Falta de dados reais &
+    Usar \textbf{Intel Lab} (Sensor Crossover) e
+    \textbf{SensorScope} (Sunrise CPD). \\
+  \addlinespace[3pt]
+  Modelo muito idealizado &
+    Comparar parâmetros sintéticos com parâmetros
+    \textbf{empíricos} estimados nos datasets. \\
+  \addlinespace[3pt]
+  Motivação em sensores pouco explorada &
+    Trabalhar explicitamente com \textbf{redes de sensores}
+    e custos de coleta/transmissão. \\
+  \addlinespace[3pt]
+  Posicionamento na literatura &
+    Conectar com detecção de mudança em redes
+    multi-sensor com restrição de recursos. \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 4 --- Hipótese geral
+% ============================================================================
+\begin{frame}{Hipótese geral do projeto}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{Modelo sintético}
+\begin{itemize}
+  \item Controle de média, variância, covariância e correlação.
+  \item Distribuição assumida (gaussiana).
+  \item Reprodutibilidade exata.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\textbf{Dado real}
+\begin{itemize}
+  \item Ruído e \textit{outliers}.
+  \item Amostragem irregular e dados faltantes.
+  \item Correlação empírica desconhecida.
+  \item Distribuição não gaussiana.
+\end{itemize}
+
+\end{column}
+\end{columns}
+
+\vspace{0.8em}
+\begin{block}{Pergunta central}
+\centering
+\itshape
+Os fenômenos previstos por modelos idealizados continuam aparecendo em dados reais?
+\end{block}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 5 --- Mapa da agenda experimental
+% ============================================================================
+\begin{frame}{Mapa da agenda experimental}
+
+\begin{center}
+\begin{tikzpicture}[
+    node distance=0.9cm and 0.9cm,
+    eixo/.style={rectangle, draw=accent, fill=accent!8, rounded corners=4pt,
+                 minimum height=1.2cm, minimum width=3.6cm, align=center,
+                 font=\small},
+  ]
+  \node[eixo] (slacgs) {\textbf{SLACGS}\\modelo sintético\\(teoria)};
+  \node[eixo, right=of slacgs] (sc) {\textbf{Sensor Crossover}\\Intel Lab\\(dados reais)};
+  \node[eixo, right=of sc] (sun) {\textbf{Sunrise CPD}\\SensorScope\\(dados reais)};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.6em}
+\begin{itemize}
+  \item \textbf{SLACGS:} estudo teórico do trade-off \textit{features}~$\times$~amostras.
+  \item \textbf{Sensor Crossover:} validação empírica com Intel Lab.
+  \item \textbf{Sunrise CPD:} adaptação de detecção de ponto de mudança em
+        rede multi-sensor sob restrição de orçamento.
+\end{itemize}
+
+\vspace{0.4em}
+\begin{center}
+\itshape\small
+Os dois projetos reais não \emph{substituem} o modelo sintético;\\
+eles \textbf{testam e refinam} sua interpretação.
+\end{center}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 6 --- SLACGS: papel do modelo sintético
+% ============================================================================
+\begin{frame}{SLACGS --- papel do modelo sintético}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{O simulador permite controlar}
+\begin{itemize}
+  \item Médias das classes $\mu_0, \mu_1$.
+  \item Variâncias $\sigma_i^2$.
+  \item Covariância / correlação $\Sigma$.
+  \item Número de \textit{features} $d$.
+  \item Número de amostras $n$.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\textbf{Fenômeno de interesse}
+\begin{itemize}
+  \item Mais \textit{features} podem \textbf{ajudar ou prejudicar}
+        dependendo de $n$.
+  \item Existe um ponto $n^{\star}$ em que usar
+        mais \textit{features} passa a compensar.
+\end{itemize}
+
+\vspace{0.4em}
+\begin{block}{Conceito}
+\centering
+\textit{Crossover:} ponto $n^{\star}$ a partir do qual
+acrescentar uma \textit{feature} reduz o erro.
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 7 --- Covariância, correlação e ponte com dados reais
+% ============================================================================
+\begin{frame}{Covariância, correlação e a ponte com dados reais}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{No modelo sintético}
+\begin{itemize}
+  \item A matriz $\Sigma$ é \emph{entrada} do modelo.
+  \item Ela é \textbf{condicionada} à estrutura de classes.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Nos dados reais começamos observando}
+\begin{itemize}
+  \item Covariância empírica \textbf{global}.
+  \item Correlação empírica global.
+  \item Versões padronizadas.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\begin{block}{Foi necessário distinguir}
+\begin{enumerate}
+  \item Covariância \textbf{teórica} do simulador.
+  \item Covariância \textbf{empírica global} do dataset.
+  \item Correlação entre sensores reais.
+\end{enumerate}
+\end{block}
+
+\vspace{0.3em}
+\small\itshape
+A tentativa de validar com dados reais nos obrigou a entender melhor o que a covariância do modelo realmente representa.
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 8 --- Sensor Crossover: ideia
+% ============================================================================
+\begin{frame}{Sensor Crossover --- ideia do experimento}
+
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+
+\textbf{Dataset:} Intel Berkeley Research Lab
+\begin{itemize}
+  \item 54 sensores de temperatura.
+  \item ${\sim}\,2{,}3$ milhões de leituras em 38 dias.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Construção do problema}
+\begin{itemize}
+  \item Sensores de temperatura tratados como \textbf{features}.
+  \item Um sensor de \textbf{referência} $R$ define as classes
+        por separação na mediana.
+  \item Outros sensores entram como \textit{features} adicionais.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.44\textwidth}
+
+\begin{block}{Pergunta}
+\centering
+Mais sensores como \textit{features}\\
+\textbf{sempre ajudam}?
+\end{block}
+
+\vspace{0.4em}
+\small
+Predição teórica: existe um ponto de cruzamento $n^{\star}$ que depende da correlação entre os sensores.
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 9 --- Sensor Crossover: desenho experimental
+% ============================================================================
+\begin{frame}{Sensor Crossover --- desenho experimental}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{Sensores escolhidos}
+\begin{itemize}
+  \item $R = $ mote 22 (referência).
+  \item $A = $ mote 25 (\textit{feature} primária).
+  \item $B_{\text{alt}} = 31$, $B_{\text{med}} = 21$, $B_{\text{baixa}} = 48$
+        (correlações decrescentes).
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Classificador}
+\begin{itemize}
+  \item SVM linear, $C = 1{,}0$.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\textbf{Procedimento}
+\begin{itemize}
+  \item Variar $n \in \{2, 4, \ldots, 1024\}$.
+  \item 500 repetições Monte Carlo por $(n, d)$.
+  \item Comparar erro com 1 e com 2 \textit{features}.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Métrica de crossover}
+\[
+  \Delta(n) = E_{d=1}(n) - E_{d=2}(n)
+\]
+$n^{\star}$: troca de sinal de $\Delta$.
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 10 --- Sensor Crossover: resultados
+% ============================================================================
+\begin{frame}{Sensor Crossover --- resultados em dados reais}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccc@{}}
+  \toprule
+  \textbf{Cenário} & $\boldsymbol{\rho}(B,R)$ & $\mathbf{n^{\star}}$ & \textbf{Tipo} \\
+  \midrule
+  Alta correlação  & 0{,}89 & 106     & Simples \\
+  Média correlação & 0{,}66 & 4 e 77  & \textcolor{redbad}{\textbf{Duplo}} \\
+  Baixa correlação & 0{,}38 & 14      & Simples \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.6em}
+\begin{exampleblock}{Mensagem}
+\begin{itemize}
+  \item O \textbf{crossover apareceu} em dados reais.
+  \item A \textbf{correlação entre sensores} desloca $n^{\star}$.
+  \item O dado real trouxe um caso de \textbf{cruzamento duplo},
+        comportamento mais complexo do que o previsto inicialmente
+        no simulador.
+\end{itemize}
+\end{exampleblock}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 11 --- Sensor Crossover: aprendizado
+% ============================================================================
+\begin{frame}{Sensor Crossover --- aprendizado}
+
+\begin{itemize}
+  \item O experimento real reforça que ``mais \textit{features}''
+        \textbf{não é automaticamente melhor}.
+  \item A \textbf{qualidade} e a \textbf{relação estatística}
+        entre sensores importam.
+  \item Dados reais introduzem efeitos que \textbf{não estavam explícitos}
+        no simulador (cauda das distribuições, regimes de operação,
+        cruzamento duplo).
+  \item Isso responde \emph{parcialmente} à crítica dos revisores:
+        o fenômeno teórico sobreviveu à transição para dados reais.
+\end{itemize}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 12 --- Segunda frente: detecção de mudança
+% ============================================================================
+\begin{frame}{Segunda frente --- detecção de ponto de mudança}
+
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+
+\textbf{Mudança de problema}
+\begin{itemize}
+  \item De \emph{classificação} para \emph{detecção}.
+  \item Tema: detecção de mudança em rede multi-sensor com
+        \textbf{restrição de recursos}.
+  \item Modelo teórico usa estatística \textbf{CUSUM} e
+        política de amostragem sob orçamento.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.44\textwidth}
+
+\textbf{Modelo}
+\[
+  X(t) \sim
+  \begin{cases}
+    \mathcal{N}(\mu_0, \sigma^2) & t < \tau \\
+    \mathcal{N}(\mu_1, \sigma^2) & t \geq \tau
+  \end{cases}
+\]
+
+\vspace{0.3em}
+\small
+$\tau$: instante da mudança.\\
+$S(t)$: subconjunto de sensores escolhido dinamicamente.
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 13 --- Sunrise CPD: adaptação para dados reais
+% ============================================================================
+\begin{frame}{Sunrise CPD --- adaptação para dados reais}
+
+\begin{columns}[T]
+\begin{column}{0.54\textwidth}
+
+\textbf{Dataset:} SensorScope --- Grand-St-Bernard (EPFL)
+\begin{itemize}
+  \item Rede de sensores ambientais sem fio em alta montanha.
+  \item Variável usada: \textbf{radiação solar}.
+  \item Período: setembro--outubro de 2007 (43 dias válidos).
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Ground truth externo}
+\begin{itemize}
+  \item Nascer do sol \textbf{astronômico}.
+  \item Evento diário com horário conhecido externamente.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.42\textwidth}
+
+\begin{block}{Ideia}
+Detectar o nascer do sol como ponto de mudança \textbf{real}, com
+ground truth independente do detector.
+\end{block}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 14 --- Sunrise CPD: pipeline implementado
+% ============================================================================
+\begin{frame}{Sunrise CPD --- pipeline implementado}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{Etapas}
+\begin{enumerate}
+  \item Aquisição e pré-processamento do SensorScope.
+  \item Relatório HTML do dataset.
+  \item Cálculo do \emph{ground truth} astronômico.
+  \item Ranking global de sensores por divergência gaussiana $D_i$.
+  \item Detector \textbf{CUSUM} sobre razão de verossimilhança.
+  \item Política dinâmica de seleção de sensores.
+\end{enumerate}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\textbf{Saídas}
+\begin{itemize}
+  \item Relatório HTML por cenário:
+    \begin{itemize}
+      \item \textit{low budget};
+      \item \textit{medium budget};
+      \item \textit{high budget}.
+    \end{itemize}
+  \item Relatório de \textbf{comparação} entre os cenários.
+  \item JSONs com métricas agregadas por dia.
+\end{itemize}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 15 --- Sunrise CPD: budget e seleção dinâmica
+% ============================================================================
+\begin{frame}{Sunrise CPD --- \textit{budget} e seleção dinâmica}
+
+\begin{columns}[T]
+\begin{column}{0.52\textwidth}
+
+\textbf{Duas restrições} (do artigo)
+\[
+  \sum_{i \in S(t)} C_i \;\leq\; B
+  \qquad
+  \sum_{i \in S(t)} T_i \;\leq\; C
+\]
+
+\begin{itemize}
+  \item $C_i$: custo de \textbf{coleta} (sensoriamento).
+  \item $T_i$: custo de \textbf{transmissão}.
+  \item $S(t)$: subconjunto escolhido a cada instante.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Custos sintéticos homogêneos:} $C_i = T_i = 1$.\\
+O primeiro sensor escolhido é \textbf{referência local}
+(custo efetivo de transmissão $0$); os demais são
+\textbf{cooperativos}.
+
+\end{column}
+\begin{column}{0.42\textwidth}
+
+\textbf{Regimes}
+
+\vspace{0.3em}
+\small
+\begin{tabular}{@{}lcc@{}}
+  \toprule
+  \textbf{Regime} & $B$ & $C$ \\
+  \midrule
+  \textit{Low}    & 1 & 0 \\
+  \textit{Medium} & 3 & 2 \\
+  \textit{High}   & 9 & 8 \\
+  \bottomrule
+\end{tabular}
+
+\vspace{0.7em}
+\itshape
+Percebemos que ``\textit{budget}'' não podia ser apenas um conjunto fixo de sensores.
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 16 --- Sunrise CPD: resultados atuais
+% ============================================================================
+\begin{frame}{Sunrise CPD --- resultados atuais}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lccccc@{}}
+  \toprule
+  \textbf{Regime} & $|S(t)|$ médio &
+  \textbf{No prazo} & \textbf{Atrasadas} & \textbf{Não detectadas} &
+  \textbf{Atraso médio$^{+}$} \\
+  \midrule
+  \textit{Low}    & 0{,}97 & 0/43 & 39/43 & 4/43 & ${\sim}\,66$ min \\
+  \textit{Medium} & 2{,}90 & 0/43 & 41/43 & 2/43 & ${\sim}\,69$ min \\
+  \textit{High}   & 6{,}62 & 0/43 & 41/43 & 2/43 & ${\sim}\,78$ min \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.3em}
+\small
+Tolerância: $\pm 15$ min em torno do nascer do sol astronômico.\\
+``Atraso médio$^{+}$'' é a média de $\max(\tau - \nu, 0)$ nas detecções (estilo ADD).
+
+\vspace{0.5em}
+\begin{block}{Mensagem}
+\begin{itemize}
+  \item A \textbf{cooperação operacional} acontece: mais orçamento $\Rightarrow$ mais sensores ativos.
+  \item Mas a detecção ficou \textbf{sistematicamente atrasada}.
+  \item \textbf{Nenhum} regime ficou dentro da tolerância.
+  \item Aumentar o orçamento \textbf{não melhorou a pontualidade}.
+\end{itemize}
+\end{block}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 17 --- Sunrise CPD: o que deu errado e por quê
+% ============================================================================
+\begin{frame}{Sunrise CPD --- o que deu errado e por quê}
+
+\begin{itemize}
+  \item O modelo com parâmetros gaussianos \textbf{globais} parece
+        inadequado para o nascer do sol real.
+  \item O nascer do sol \textbf{não é uma mudança abrupta};
+        é uma transição gradual.
+  \item $\mu_1$ global pode representar a radiação \textbf{bem depois}
+        do nascer do sol.
+  \item O CUSUM acaba detectando quando o aumento já está \textbf{consolidado}.
+  \item A média dos sensores em $S(t)$ pode \textbf{diluir} sinais fortes
+        e atrasar a estatística.
+\end{itemize}
+
+\vspace{0.6em}
+\begin{exampleblock}{Mensagem}
+O problema deixou de ser apenas o \textit{budget}; passou a ser também
+a \textbf{parametrização estatística} do evento real.
+\end{exampleblock}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 18 --- Discussão metodológica: global, diário e futuro
+% ============================================================================
+\begin{frame}{Discussão metodológica --- global, diário e futuro}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{Parâmetros globais}
+\begin{itemize}
+  \item $D_i$ global: útil como \emph{ranking}, mas usa
+        informação agregada do dataset.
+  \item $\mu_0$ global: problemático, porque cada dia tem
+        \textbf{baseline e horário diferentes}.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Parâmetros diários}
+\begin{itemize}
+  \item $\mu_0$ diário: defensável (usa só pré-\textit{sunrise}).
+  \item $D_i$ diário: \emph{quase oracle} (exige pós-\textit{sunrise}).
+\end{itemize}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\textbf{Caminhos futuros}
+\begin{itemize}
+  \item Separar \textbf{treino e teste} de forma temporal.
+  \item Estimar parâmetros com dados \textbf{históricos}.
+  \item Combinar $\mu_0$ diário com $D_i$ global.
+  \item \textbf{Clusterizar dias} por padrões de visibilidade
+        e radiação; estimar parâmetros por grupo.
+\end{itemize}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 19 --- Síntese dos aprendizados
+% ============================================================================
+\begin{frame}{Síntese dos aprendizados}
+
+\begin{center}
+\small
+\begin{tabular}{@{}lp{3.6cm}p{5.2cm}@{}}
+  \toprule
+  \textbf{Projeto} & \textbf{Resultado} & \textbf{Aprendizado} \\
+  \midrule
+  SLACGS &
+    Modelo controlado &
+    Esclarece o papel de covariância e correlação. \\
+  \addlinespace[2pt]
+  Sensor Crossover &
+    Crossover observado em dados reais &
+    O fenômeno sintético aparece, com complexidade adicional. \\
+  \addlinespace[2pt]
+  Sunrise CPD &
+    \textit{Budget} dinâmico implementado, mas detecção atrasada &
+    O dado real revela um \emph{mismatch} entre modelo e fenômeno. \\
+  \bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{0.8em}
+\begin{block}{Mensagem}
+\centering\itshape
+O dado real não é apenas validação; ele é um \textbf{instrumento
+para descobrir hipóteses escondidas}.
+\end{block}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 20 --- Etapas futuras (inclui adversarial)
+% ============================================================================
+\begin{frame}{Etapas futuras}
+
+\begin{columns}[T]
+\begin{column}{0.50\textwidth}
+
+\textbf{Sensor Crossover}
+\begin{itemize}
+  \item Consolidar como \textbf{evidência empírica} do primeiro artigo.
+  \item Estender para mais combinações de sensores e dimensões.
+\end{itemize}
+
+\vspace{0.4em}
+\textbf{Sunrise CPD}
+\begin{itemize}
+  \item Testar baselines \textbf{diários}.
+  \item Calibrar limiar e \textit{drift} do CUSUM.
+  \item Avaliar agregação ponderada e custos heterogêneos.
+  \item Separar treino e teste no tempo.
+\end{itemize}
+
+\end{column}
+\begin{column}{0.46\textwidth}
+
+\textbf{Expansão para cenários adversariais}
+\begin{itemize}
+  \item Sensores comprometidos.
+  \item Mudanças induzidas (ataques sutis).
+  \item Cooperação sob \textbf{restrição de comunicação}.
+  \item Conexão com detecção \textbf{robusta} em redes de sensores
+        e com a parte covert/adversarial do artigo original.
+\end{itemize}
+
+\end{column}
+\end{columns}
+
+\end{frame}
+
+% ============================================================================
+% SLIDE 21 --- Fechamento
+% ============================================================================
+\begin{frame}{Fechamento}
+
+\begin{itemize}
+  \item Já há \textbf{progresso concreto} em duas frentes empíricas.
+  \item O \textbf{primeiro experimento} (Sensor Crossover) produziu
+        evidência positiva: o crossover aparece em dados reais.
+  \item O \textbf{segundo experimento} (Sunrise CPD) revelou desafios
+        metodológicos importantes na transição teoria $\to$ dado real.
+  \item O principal ganho foi transformar uma crítica
+        (\textit{``faltam dados reais''}) em uma agenda experimental
+        com resultados verificáveis.
+\end{itemize}
+
+\vspace{1.0em}
+\begin{center}
+\begin{minipage}{0.88\textwidth}
+\centering\itshape
+\textcolor{accent}{\large
+``Experimentar com dados reais não apenas testa a teoria;\\
+muitas vezes ajuda a entender melhor a própria teoria.''}
+\end{minipage}
+\end{center}
+
+\end{frame}
+
+\end{document}
